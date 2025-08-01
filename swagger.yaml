@@ -1,0 +1,144 @@
+openapi: 3.0.0
+info:
+  title: AI Travel Planner API
+  description: API for a smart travel planner with transport prediction and cost estimation.
+  version: 6.0.0
+
+servers:
+  - url: http://127.0.0.1:5000
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Budget:
+      type: object
+      properties:
+        min: { type: number }
+        max: { type: number }
+        currency: { type: string, example: "INR" }
+    # ... (other schemas like Location, Activity, Weather, DayPlan remain the same) ...
+    Location:
+      type: object
+      properties: { name: { type: string }, lat: { type: number }, lng: { type: number } }
+    EstimatedCost:
+      type: object
+      properties: { amount: { type: number }, currency: { type: string } }
+    Activity:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        location: { $ref: '#/components/schemas/Location' }
+        estimated_cost: { $ref: '#/components/schemas/EstimatedCost' }
+        local_cuisine_suggestion: { type: string, nullable: true }
+        special_event: { type: string, nullable: true }
+    Weather:
+      type: object
+      properties: { date: { type: string, format: date }, weather_code: { type: integer }, temp_max: { type: number }, temp_min: { type: number } }
+    DayPlan:
+      type: object
+      properties:
+        day: { type: integer }
+        date: { type: string, format: date }
+        weather: { $ref: '#/components/schemas/Weather' }
+        morning: { $ref: '#/components/schemas/Activity' }
+        afternoon: { $ref: '#/components/schemas/Activity' }
+        evening: { $ref: '#/components/schemas/Activity' }
+    TransportRecommendation:
+      type: object
+      properties:
+        mode: { type: string, example: "Flight" }
+        estimated_cost_round_trip: { $ref: '#/components/schemas/EstimatedCost' }
+        details: { type: string }
+    FullPlan:
+      type: object
+      properties:
+        itinerary:
+          type: array
+          items:
+            $ref: '#/components/schemas/DayPlan'
+        transport_recommendation:
+          $ref: '#/components/schemas/TransportRecommendation'
+
+paths:
+  # ... (Authentication and General paths remain the same) ...
+  /:
+    get: { summary: Welcome Endpoint, tags: [General], responses: { '200': { description: API is running } } }
+  /api/v1/auth/register:
+    post: { summary: Register a new user, tags: [Authentication], requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { email: { type: string }, password: { type: string } } } } } }, responses: { '201': { description: User created successfully } } }
+  /api/v1/auth/login:
+    post: { summary: Log in a user, tags: [Authentication], requestBody: { required: true, content: { application/json: { schema: { type: object, properties: { email: { type: string }, password: { type: string } } } } } }, responses: { '200': { description: Login successful } } }
+  
+  /api/v1/trips:
+    # GET /trips remains the same
+    get:
+      summary: Get all trips for the current user
+      tags: [Trips]
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200': { description: A list of trips }
+    post:
+      summary: Create a new, intelligent trip with transport
+      tags: [Trips]
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [destination, start_date, end_date, budget, current_location]
+              properties:
+                destination: { type: string, example: "Goa, India" }
+                start_date: { type: string, format: date, example: "2025-08-10" }
+                end_date: { type: string, format: date, example: "2025-08-14" }
+                budget: { $ref: '#/components/schemas/Budget' }
+                interests: { type: array, items: { type: string }, example: ["beaches", "nightlife"] }
+                current_location:
+                  type: string
+                  example: "Kochi, India"
+      responses:
+        '201':
+          description: Trip created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  msg: { type: string }
+                  trip_id: { type: integer }
+                  plan: { $ref: '#/components/schemas/FullPlan' }
+  
+  # ... (/trips/{id} GET and DELETE remain the same) ...
+  /api/v1/trips/{trip_id}:
+    get: { summary: Get a specific trip, tags: [Trips], security: [ { bearerAuth: [] } ], parameters: [ { in: path, name: trip_id, required: true, schema: { type: integer } } ], responses: { '200': { description: Trip details } } }
+    delete: { summary: Delete a specific trip, tags: [Trips], security: [ { bearerAuth: [] } ], parameters: [ { in: path, name: trip_id, required: true, schema: { type: integer } } ], responses: { '200': { description: Trip deleted successfully } } }
+
+  /api/v1/transport/flights:
+    get:
+      summary: Get real-time flight options (standalone)
+      tags: [Transport]
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - { in: query, name: origin, required: true, schema: { type: string, example: "Kochi, India" } }
+        - { in: query, name: destination, required: true, schema: { type: string, example: "Goa, India" } }
+        - { in: query, name: date, required: true, schema: { type: string, format: date, example: "2025-08-10" } }
+      responses:
+        '200': { description: A list of available flight offers. }
+  
+  /api/v1/transport/trains:
+    get:
+      summary: Get simulated train options (standalone)
+      tags: [Transport]
+      security: [ { bearerAuth: [] } ]
+      parameters:
+        - { in: query, name: origin, required: true, schema: { type: string, example: "Kochi, India" } }
+        - { in: query, name: destination, required: true, schema: { type: string, example: "Goa, India" } }
+        - { in: query, name: date, required: true, schema: { type: string, format: date, example: "2025-08-10" } }
+      responses:
+        '200': { description: A list of simulated train options. }
